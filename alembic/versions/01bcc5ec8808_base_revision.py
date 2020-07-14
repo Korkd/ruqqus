@@ -6,6 +6,7 @@ Create Date: 2020-07-12 20:14:57.019779
 
 """
 from alembic import op
+from alembic import context
 import sqlalchemy as sa
 from psycopg2 import InternalError
 from sqlalchemy.sql.expression import text
@@ -19,6 +20,16 @@ depends_on = None
 
 
 def upgrade():
+    schema_upgrades()
+    if context.get_x_argument(as_dictionary=True).get('data', None):
+        data_upgrades()
+
+
+def downgrade():
+    schema_downgrade()
+
+
+def schema_upgrades():
     op.execute("SET statement_timeout = 0;")
     op.execute("SET lock_timeout = 0;")
     op.execute("SET idle_in_transaction_session_timeout = 0;")
@@ -109,6 +120,7 @@ def upgrade():
     sa.Column('patreon_access_token', sa.String(length=128), nullable=True),
     sa.Column('patreon_refresh_token', sa.String(length=128), nullable=True),
     sa.Column('patreon_pledge_cents', sa.Integer(), nullable=True),
+    sa.Column('patreon_name', sa.String(length=64), nullable=True),
     sa.ForeignKeyConstraint(['referred_by'], ['users.id'], ),
     sa.ForeignKeyConstraint(['title_id'], ['titles.id'], ),
     sa.UniqueConstraint('email'),
@@ -194,6 +206,7 @@ def upgrade():
     sa.Column('color_nonce', sa.Integer(), nullable=True, server_default='0'),
     sa.Column('is_nsfl', sa.Boolean(), nullable=True, server_default='false'),
     sa.Column('rank_trending', sa.Float(), nullable=True, server_default=text('0')),
+    sa.Column('stored_subscriber_count', sa.Integer(), nullable=True, server_default='1'),
     sa.ForeignKeyConstraint(['creator_id'], ['users.id'], ),
     sa.UniqueConstraint('name'),
     sa.PrimaryKeyConstraint('id')
@@ -253,7 +266,7 @@ def upgrade():
     sa.Column('score_top', sa.Integer(), nullable=True, server_default=text('0')),
     sa.Column('score_activity', sa.Float(), nullable=True, server_default=text('0')),
     sa.Column('score_disputed', sa.Float(), nullable=True, server_default=text('0')),
-    sa.Column('is_offensive', sa.Boolean(), nullable=True),
+    sa.Column('is_offensive', sa.Boolean(), nullable=True, server_default='false'),
     sa.Column('is_pinned', sa.Boolean(), nullable=True, server_default='false'),
     sa.Column('is_nsfl', sa.Boolean(), nullable=True, server_default='false'),
     sa.Column('repost_id', sa.Integer(), nullable=True, server_default='0'),
@@ -261,9 +274,7 @@ def upgrade():
     sa.ForeignKeyConstraint(['author_id'], ['users.id'], ),
     sa.ForeignKeyConstraint(['board_id'], ['boards.id'], ),
     sa.ForeignKeyConstraint(['domain_ref'], ['domains.id'], ),
-    sa.ForeignKeyConstraint(['is_approved'], ['users.id'], ),
     sa.ForeignKeyConstraint(['original_board_id'], ['boards.id'], ),
-    sa.ForeignKeyConstraint(['repost_id'], ['submissions.id'], ),
     sa.Index('submissions_domain_ref_idx', 'domain_ref'),
     sa.Index('submissions_over_18_idx', 'over_18'),
     sa.Index('submissions_author_id_idx', 'author_id'),
@@ -521,8 +532,6 @@ def upgrade():
     sa.Index('subscriptions_board_id_idx', 'board_id'),
     sa.PrimaryKeyConstraint('id')
     )
-
-
 
     op.create_table('useragents',
     sa.Column('id', sa.Integer(), nullable=False),
@@ -1032,7 +1041,8 @@ def upgrade():
                       $_$;")
     # endregion
 
-def downgrade():
+
+def schema_downgrade():
 
     # Remove all functions
     op.execute("DO $$ DECLARE \
@@ -1079,3 +1089,59 @@ def downgrade():
     op.drop_table('boards')
     op.drop_table('users')
     op.drop_table('titles')
+
+
+def data_upgrades():
+    users = sa.table('users',
+                     sa.column('id', sa.Integer()),
+                     sa.column('username', sa.String(length=255)),
+                     sa.column('email', sa.String(length=255)),
+                     sa.column('passhash', sa.String(length=255)),
+                     sa.column('created_utc', sa.Integer()),
+                     sa.column('admin_level', sa.Integer()),
+                     sa.column('creation_ip', sa.String(length=255)),
+                     sa.column('login_nonce', sa.Integer()),
+                     sa.column('tos_agreed_utc', sa.Integer())
+                     )
+
+    op.execute(users.insert().values(
+        username='ruqqie',
+        email='ruqqie@ruqqus.com',
+        passhash='pbkdf2:sha512:150000$vmPzuBFj$24cde8a6305b7c528b0428b1e87f256c65741bb035b4356549c13e745cc0581701431d5a2297d98501fcf20367791b4334dcd19cf063a6e60195abe8214f91e8',
+        admin_level='100',
+        created_utc='1592672337',
+        creation_ip='127.0.0.1',
+        tos_agreed_utc='1592672337',
+        login_nonce='1'
+    ))
+
+    boards = sa.table('boards',
+                      sa.column('id', sa.Integer()),
+                      sa.column('name', sa.String(length=64)),
+                      sa.column('is_banned', sa.Boolean()),
+                      sa.column('created_utc', sa.Integer()),
+                      sa.column('creator_id', sa.Integer()),
+                      sa.column('color', sa.String(length=8))
+                      )
+
+    op.execute(boards.insert().values(
+        name='general',
+        is_banned=False,
+        created_utc='1594709265',
+        creator_id='1',
+        color='805ad5'
+    ))
+
+    badge_defs = sa.table('badge_defs',
+                          sa.column('id', sa.Integer()),
+                          sa.column('name', sa.String(length=64)),
+                          sa.column('description', sa.String(length=256)),
+                          sa.column('icon', sa.String(length=64))
+                          )
+
+    op.execute(badge_defs.insert().values(
+        id='6',
+        name='beta',
+        description='Beta Badge',
+        icon='beta.png'
+    ))

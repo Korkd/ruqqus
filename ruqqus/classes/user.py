@@ -555,7 +555,7 @@ class User(Base, Stndrd):
 
     @property
     def can_make_guild(self):
-        return (self.true_score > 250 or self.created_utc <= 1592974538 and self.true_score > 50 or (self.patreon_pledge_cents and self.patreon_pledge_cents>=500)) and len(self.boards_modded) < 10
+        return (self.true_score > 250 or self.created_utc <= 1592974538 and self.true_score > 50 or (self.patreon_pledge_cents and self.patreon_pledge_cents>=500)) and len(self.boards_modded) < 10 or self.admin_level > 0
     
     @property
     def can_join_gms(self):

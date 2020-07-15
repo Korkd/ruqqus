@@ -165,7 +165,7 @@ def schema_upgrades():
     sa.Column('created_utc', sa.Integer(), nullable=True),
     sa.ForeignKeyConstraint(['badge_id'], ['badge_defs.id'], ),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-    sa.Index('badges_user_idx', 'user_id'),
+    sa.Index('badges_user_id_idx', 'user_id'),
     sa.PrimaryKeyConstraint('id')
     )
 
@@ -223,8 +223,8 @@ def schema_upgrades():
     sa.ForeignKeyConstraint(['banning_mod_id'], ['users.id'], ),
     sa.ForeignKeyConstraint(['board_id'], ['boards.id'], ),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-    sa.Index('ban_board_idx', 'board_id'),
-    sa.Index('ban_user_idx', 'user_id'),
+    sa.Index('ban_board_id_idx', 'board_id'),
+    sa.Index('ban_user_id_idx', 'user_id'),
     sa.PrimaryKeyConstraint('id')
     )
 
@@ -275,6 +275,7 @@ def schema_upgrades():
     sa.ForeignKeyConstraint(['board_id'], ['boards.id'], ),
     sa.ForeignKeyConstraint(['domain_ref'], ['domains.id'], ),
     sa.ForeignKeyConstraint(['original_board_id'], ['boards.id'], ),
+    sa.ForeignKeyConstraint(['mod_approved'], ['users.id'], ),
     sa.Index('submissions_domain_ref_idx', 'domain_ref'),
     sa.Index('submissions_over_18_idx', 'over_18'),
     sa.Index('submissions_author_id_idx', 'author_id'),
@@ -282,17 +283,17 @@ def schema_upgrades():
     sa.Index('submissions_is_pinned_idx', 'is_pinned'),
     sa.Index('submissions_board_id_idx', 'board_id'),
     sa.Index('submissions_stickied_idx', 'stickied'),
-    sa.Index('submissions_created_utc_idx', 'created_utc', postgresql_ops={'created_utc': 'DESC'}),
+    sa.Index('submissions_created_utc_sort_idx', 'created_utc', postgresql_ops={'created_utc': 'DESC'}),
     sa.Index('submissions_binary_group_idx', 'is_banned', 'is_deleted', 'over_18'),
-    sa.Index('submissions_activity_disputed_idx', 'score_disputed', 'board_id', postgresql_ops={'score_disputed': 'DESC'}),
-    sa.Index('submissions_activity_hot_idx', 'score_hot', 'board_id', postgresql_ops={'score_hot': 'DESC'}),
-    sa.Index('submissions_activity_sort_idx', 'score_activity', 'board_id', postgresql_ops={'score_activity': 'DESC'}),
-    sa.Index('submissions_activity_top_idx', 'score_top', 'board_id', postgresql_ops={'score_top': 'DESC'}),
-    sa.Index('submissions_activity_best_idx', 'score_best', 'board_id', postgresql_ops={'score_best': 'DESC'}),
-    sa.Index('submissions_disputed_sort_idx', 'is_banned', 'is_deleted', 'score_disputed', 'over_18', postgresql_ops={'score_disputed': 'DESC'}),
-    sa.Index('submissions_hot_sort_idx', 'is_banned', 'is_deleted', 'score_hot', 'over_18', postgresql_ops={'score_hot': 'DESC'}),
-    sa.Index('submissions_new_sort_idx', 'is_banned', 'is_deleted', 'created_utc', 'over_18', postgresql_ops={'created_utc': 'DESC'}),
-    sa.Index('submissions_trending_all_idx', 'is_banned', 'is_deleted', 'stickied', 'over_18', postgresql_ops={'stickied': 'DESC'}),
+    sa.Index('submissions_board_sort_disputed_idx', 'score_disputed', 'board_id', postgresql_ops={'score_disputed': 'DESC'}),
+    sa.Index('submissions_board_sort_hot_idx', 'score_hot', 'board_id', postgresql_ops={'score_hot': 'DESC'}),
+    sa.Index('submissions_board_sort_activity_idx', 'score_activity', 'board_id', postgresql_ops={'score_activity': 'DESC'}),
+    sa.Index('submissions_board_sort_top_idx', 'score_top', 'board_id', postgresql_ops={'score_top': 'DESC'}),
+    sa.Index('submissions_board_sort_best_idx', 'score_best', 'board_id', postgresql_ops={'score_best': 'DESC'}),
+    sa.Index('submissions_shown_sort_disputed_idx', 'is_banned', 'is_deleted', 'score_disputed', 'over_18', postgresql_ops={'score_disputed': 'DESC'}),
+    sa.Index('submissions_shown_sort_hot_idx', 'is_banned', 'is_deleted', 'score_hot', 'over_18', postgresql_ops={'score_hot': 'DESC'}),
+    sa.Index('submissions_shown_sort_new_idx', 'is_banned', 'is_deleted', 'created_utc', 'over_18', postgresql_ops={'created_utc': 'DESC'}),
+    sa.Index('submissions_trending_all_idx', 'is_banned', 'is_deleted', 'stickied', 'post_public', 'score_hot', postgresql_ops={'score_hot': 'DESC'}),
     sa.Index('submissions_time_board_idx', 'created_utc', 'board_id', postgresql_where=text('created_utc > 1590859918')),
     sa.PrimaryKeyConstraint('id')
     )
@@ -324,13 +325,13 @@ def schema_upgrades():
     sa.ForeignKeyConstraint(['author_id'], ['users.id'], ),
     sa.ForeignKeyConstraint(['parent_comment_id'], ['comments.id'], ),
     sa.ForeignKeyConstraint(['parent_submission'], ['submissions.id'], ),
-    sa.Index('comments_parent_idx', 'parent_comment_id'),
-    sa.Index('comments_post_id_idx', 'parent_submission'),
+    sa.Index('comments_parent_comment_id_idx', 'parent_comment_id'),
+    sa.Index('comments_parent_submission_idx', 'parent_submission'),
+    sa.Index('comments_author_id_idx', 'author_id'),
     sa.Index('comments_loader_idx', 'parent_submission', 'level', 'score_hot', postgresql_ops={'score_hot': 'DESC'}, postgresql_where=text('level <= 8')),
-    sa.Index('comments_score_disupted_idx', 'score_disputed', postgresql_ops={'score_disputed': 'DESC'}),
+    sa.Index('comments_score_disputed_idx', 'score_disputed', postgresql_ops={'score_disputed': 'DESC'}),
     sa.Index('comments_score_hot_idx', 'score_hot', postgresql_ops={'score_hot': 'DESC'}),
     sa.Index('comments_score_top_idx', 'score_top', postgresql_ops={'score_top': 'DESC'}),
-    sa.Index('comments_user_idx', 'author_id'),
     sa.PrimaryKeyConstraint('id')
     )
 
@@ -341,8 +342,8 @@ def schema_upgrades():
     sa.Column('created_utc', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['comment_id'], ['comments.id'], ),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-    sa.Index('commentflags_user_idx', 'user_id'),
-    sa.Index('commentflags_comment_idx', 'comment_id'),
+    sa.Index('commentflags_user_id_idx', 'user_id'),
+    sa.Index('commentflags_comment_id_idx', 'comment_id'),
     sa.PrimaryKeyConstraint('id')
     )
 
@@ -353,7 +354,7 @@ def schema_upgrades():
     sa.Column('ban_reason', sa.String(length=128), nullable=True),
     sa.Column('key_id', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['id'], ['comments.id'], ),
-    sa.Index('comments_aux_id_idx', 'id'),
+    sa.Index('commentsaux_id_idx', 'id'),
     sa.PrimaryKeyConstraint('key_id')
     )
 
@@ -366,7 +367,7 @@ def schema_upgrades():
     sa.ForeignKeyConstraint(['comment_id'], ['comments.id'], ),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.Index('commentvotes_comment_id_idx', 'comment_id'),
-    sa.Index('commentvotes_comment_type_idx', 'vote_type'),
+    sa.Index('commentvotes_vote_type_idx', 'vote_type'),
     sa.Index('commentvotes_user_id_idx', 'user_id'),
     sa.PrimaryKeyConstraint('id')
     )
@@ -381,9 +382,9 @@ def schema_upgrades():
     sa.ForeignKeyConstraint(['approving_mod_id'], ['users.id'], ),
     sa.ForeignKeyConstraint(['board_id'], ['boards.id'], ),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-    sa.Index('contributors_active_idx', 'is_active'),
-    sa.Index('contributors_board_idx', 'board_id'),
-    sa.Index('contributors_user_idx', 'user_id'),
+    sa.Index('contributors_is_active_idx', 'is_active'),
+    sa.Index('contributors_board_id_idx', 'board_id'),
+    sa.Index('contributors_user_id_idx', 'user_id'),
     sa.PrimaryKeyConstraint('id')
     )
 
@@ -406,8 +407,8 @@ def schema_upgrades():
     sa.Column('created_utc', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['post_id'], ['submissions.id'], ),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-    sa.Index('flags_user_idx', 'user_id'),
-    sa.Index('flags_post_idx', 'post_id'),
+    sa.Index('flags_user_id_idx', 'user_id'),
+    sa.Index('flags_post_id_idx', 'post_id'),
     sa.PrimaryKeyConstraint('id')
     )
 
@@ -513,8 +514,8 @@ def schema_upgrades():
     sa.Column('ban_reason', sa.String(length=128), nullable=True),
     sa.Column('key_id', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['id'], ['submissions.id'], ),
-    sa.Index('submissions_aux_id_idx', 'id'),
-    sa.Index('submissions_aux_title_idx', 'title'),
+    sa.Index('submissionsaux_id_idx', 'id'),
+    sa.Index('submissionsaux_title_idx', 'title'),
     sa.PrimaryKeyConstraint('key_id')
     )
 

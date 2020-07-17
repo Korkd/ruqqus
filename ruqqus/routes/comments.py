@@ -239,12 +239,11 @@ def api_comment(v):
     if post.is_archived or not post.board.can_comment(v):
         return jsonify({"error":"You can't comment on this."}), 403
 
+    is_offensive = False
     for x in g.db.query(BadWord).all():
         if x.check(body):
             is_offensive=True
             break
-        else:
-            is_offensive=False
         
     #create comment
     c=Comment(author_id=v.id,

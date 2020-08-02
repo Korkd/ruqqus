@@ -46,6 +46,11 @@ def recompute():
                 i+=1
                 post_count+=1
 
+                post.upvotes = post.ups
+                post.downvotes=post.downs
+                db.add(post)
+                db.flush()
+
                 post.score_hot = post.rank_hot
                 post.score_disputed=post.rank_fiery
                 #post.score_top=post.score
@@ -61,6 +66,11 @@ def recompute():
 
 
                     comment_count+=1
+
+                    comment.upvotes=comment.ups
+                    comment.downvotes=comment.downs
+                    db.add(comment)
+                    db.flush()
             
             
                     comment.score_disputed=comment.rank_fiery

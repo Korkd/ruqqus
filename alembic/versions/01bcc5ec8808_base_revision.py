@@ -270,6 +270,8 @@ def schema_upgrades():
     sa.Column('is_nsfl', sa.Boolean(), nullable=True, server_default='false'),
     sa.Column('repost_id', sa.Integer(), nullable=True, server_default='0'),
     sa.Column('score_best', sa.Float(), nullable=True, server_default=text('0')),
+    sa.Column('upvotes', sa.Integer(), nullable=True, server_default='1'),
+    sa.Column('downvotes', sa.Integer(), nullable=True, server_default='0'),
     sa.ForeignKeyConstraint(['author_id'], ['users.id'], ),
     sa.ForeignKeyConstraint(['board_id'], ['boards.id'], ),
     sa.ForeignKeyConstraint(['domain_ref'], ['domains.id'], ),

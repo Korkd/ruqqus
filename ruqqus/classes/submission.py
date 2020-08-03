@@ -74,8 +74,8 @@ class Submission(Base, Stndrd, Age_times, Scores, Fuzzing):
     is_pinned=Column(Boolean, default=False)
     score_best=Column(Float, default=0)
 
-    upvotes = Column(Integer, default=1)
-    downvotes = Column(Integer, default=0)
+    #upvotes = Column(Integer, default=1)
+    #downvotes = Column(Integer, default=0)
 
     approved_by=relationship("User", uselist=False, primaryjoin="Submission.is_approved==User.id")
 

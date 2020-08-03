@@ -40,25 +40,14 @@ def schema_upgrades():
     op.execute("SET client_min_messages = warning;")
     op.execute("SET row_security = off;")
 
-    '''
-    try:
-        op.execute("CREATE EXTENSION IF NOT EXISTS fuzzystrmatch WITH SCHEMA public;")
-        op.execute("COMMENT ON EXTENSION fuzzystrmatch IS 'determine similarities and distance between strings';")
-    except InternalError as e:
-        print(e.pgerror)
+    op.execute("CREATE EXTENSION IF NOT EXISTS fuzzystrmatch WITH SCHEMA public;")
+    op.execute("COMMENT ON EXTENSION fuzzystrmatch IS 'determine similarities and distance between strings';")
 
-    try:
-        op.execute("CREATE EXTENSION IF NOT EXISTS pg_stat_statements WITH SCHEMA public;")
-        op.execute("COMMENT ON EXTENSION pg_stat_statements IS 'track execution statistics of all SQL statements executed';")
-    except InternalError as e:
-        print(e.pgerror)
+    op.execute("CREATE EXTENSION IF NOT EXISTS pg_stat_statements WITH SCHEMA public;")
+    op.execute("COMMENT ON EXTENSION pg_stat_statements IS 'track execution statistics of all SQL statements executed';")
 
-    try:
-        op.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;")
-        op.execute("COMMENT ON EXTENSION pg_trgm IS 'text similarity measurement and index searching based on trigrams';")
-    except InternalError as e:
-        print(e.pgerror)
-    '''
+    op.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;")
+    op.execute("COMMENT ON EXTENSION pg_trgm IS 'text similarity measurement and index searching based on trigrams';")
 
     op.execute("SET default_tablespace = '';")
     op.execute("SET default_table_access_method = heap;")
@@ -72,6 +61,11 @@ def schema_upgrades():
     sa.Column('requirement_string', sa.String(length=512), nullable=True),
     sa.Column('color', sa.String(length=6), nullable=True, server_default='000000'),
     sa.Column('kind', sa.Integer(), nullable=True, server_default='1'),
+    sa.Column('background_color_1', sa.String(length=8), nullable=True, server_default=text('NULL::character varying')),
+    sa.Column('background_color_2', sa.String(length=8), nullable=True,server_default=text('NULL::character varying')),
+    sa.Column('gradient_angle', sa.Integer(), nullable=True, server_default='0'),
+    sa.Column('box_shadow_color', sa.String(length=32), nullable=True),
+    sa.Column('text_shadow_color', sa.String(length=32), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )
 
@@ -87,8 +81,8 @@ def schema_upgrades():
     sa.Column('hide_offensive', sa.Boolean(), nullable=True, server_default='false'),
     sa.Column('is_activated', sa.Boolean(), nullable=True, server_default='false'),
     sa.Column('reddit_username', sa.String(length=64), nullable=True, server_default=text('NULL::character varying')),
-    sa.Column('bio', sa.String(length=256), nullable=True, server_default=''),
-    sa.Column('bio_html', sa.String(length=300), nullable=True),
+    sa.Column('bio', sa.String(length=300), nullable=True, server_default=''),
+    sa.Column('bio_html', sa.String(length=1000), nullable=True),
     sa.Column('real_id', sa.String(), nullable=True),
     sa.Column('referred_by', sa.Integer(), nullable=True),
     sa.Column('is_banned', sa.Integer(), nullable=True, server_default='0'),
@@ -116,19 +110,22 @@ def schema_upgrades():
     sa.Column('unban_utc', sa.Integer(), nullable=True, server_default='0'),
     sa.Column('is_deleted', sa.Boolean(), nullable=True, server_default='false'),
     sa.Column('delete_reason', sa.String(length=1000), nullable=True, server_default=''),
-    sa.Column('patreon_id', sa.String(length=64), nullable=True),
+    sa.Column('patreon_id', sa.String(length=64), nullable=True, server_default=text('NULL::bpchar')),
     sa.Column('patreon_access_token', sa.String(length=128), nullable=True),
     sa.Column('patreon_refresh_token', sa.String(length=128), nullable=True),
-    sa.Column('patreon_pledge_cents', sa.Integer(), nullable=True),
+    sa.Column('patreon_pledge_cents', sa.Integer(), nullable=True, server_default='0'),
     sa.Column('patreon_name', sa.String(length=64), nullable=True),
     sa.ForeignKeyConstraint(['referred_by'], ['users.id'], ),
     sa.ForeignKeyConstraint(['title_id'], ['titles.id'], ),
     sa.UniqueConstraint('email'),
     sa.UniqueConstraint('reddit_username'),
     sa.UniqueConstraint('username'),
+    sa.UniqueConstraint('patreon_id'),
     sa.Index('users_is_deleted_idx', 'is_deleted'),
     sa.Index('users_created_utc_idx', 'created_utc'),
     sa.Index('users_title_id_idx', 'title_id'),
+    sa.Index('users_is_banned_idx', 'is_banned'),
+    sa.Index('users_is_private_idx', 'is_private'),
     sa.PrimaryKeyConstraint('id')
     )
 
@@ -153,6 +150,7 @@ def schema_upgrades():
     sa.Column('rank', sa.Integer(), nullable=True, server_default='1'),
     sa.Column('qualification_expr', sa.String(length=128), nullable=True),
     sa.UniqueConstraint('icon'),
+    sa.Index('badge_defs_qualification_expr_idx', 'qualification_expr'),
     sa.PrimaryKeyConstraint('id')
     )
 
@@ -206,9 +204,10 @@ def schema_upgrades():
     sa.Column('color_nonce', sa.Integer(), nullable=True, server_default='0'),
     sa.Column('is_nsfl', sa.Boolean(), nullable=True, server_default='false'),
     sa.Column('rank_trending', sa.Float(), nullable=True, server_default=text('0')),
-    sa.Column('stored_subscriber_count', sa.Integer(), nullable=True, server_default='1'),
+    sa.Column('stored_subscriber_count', sa.Integer(), nullable=True),
     sa.ForeignKeyConstraint(['creator_id'], ['users.id'], ),
     sa.UniqueConstraint('name'),
+    sa.Index('boards_stored_subscriber_count_idx', 'stored_subscriber_count', postgresql_ops={'stored_subscriber_count': 'DESC'}),
     sa.PrimaryKeyConstraint('id')
     )
 
@@ -323,13 +322,14 @@ def schema_upgrades():
     sa.Column('is_offensive', sa.Boolean(), nullable=True),
     sa.Column('is_nsfl', sa.Boolean(), nullable=True, server_default='false'),
     sa.Column('original_board_id', sa.Integer(), nullable=True),
-    sa.ForeignKeyConstraint(['author_id'], ['users.id'], ),
-    sa.ForeignKeyConstraint(['parent_comment_id'], ['comments.id'], ),
-    sa.ForeignKeyConstraint(['parent_submission'], ['submissions.id'], ),
-    sa.ForeignKeyConstraint(['original_board_id'], ['boards.id']),
+    #sa.ForeignKeyConstraint(['author_id'], ['users.id'], ),
+    #sa.ForeignKeyConstraint(['parent_comment_id'], ['comments.id'], ),
+    #sa.ForeignKeyConstraint(['parent_submission'], ['submissions.id'], ),
+    #sa.ForeignKeyConstraint(['original_board_id'], ['boards.id']),
     sa.Index('comments_parent_comment_id_idx', 'parent_comment_id'),
     sa.Index('comments_parent_submission_idx', 'parent_submission'),
     sa.Index('comments_author_id_idx', 'author_id'),
+    sa.Index('comments_original_board_id_idx', 'original_board_id'),
     sa.Index('comments_loader_idx', 'parent_submission', 'level', 'score_hot', postgresql_ops={'score_hot': 'DESC'}, postgresql_where=text('level <= 8')),
     sa.Index('comments_score_disputed_idx', 'score_disputed', postgresql_ops={'score_disputed': 'DESC'}),
     sa.Index('comments_score_hot_idx', 'score_hot', postgresql_ops={'score_hot': 'DESC'}),
@@ -355,7 +355,7 @@ def schema_upgrades():
     sa.Column('body_html', sa.String(length=20000), nullable=True),
     sa.Column('ban_reason', sa.String(length=128), nullable=True),
     sa.Column('key_id', sa.Integer(), nullable=False),
-    sa.ForeignKeyConstraint(['id'], ['comments.id'], ),
+    #sa.ForeignKeyConstraint(['id'], ['comments.id'], ),
     sa.Index('commentsaux_id_idx', 'id'),
     sa.PrimaryKeyConstraint('key_id')
     )
@@ -366,8 +366,9 @@ def schema_upgrades():
     sa.Column('vote_type', sa.Integer(), nullable=True),
     sa.Column('user_id', sa.Integer(), nullable=True),
     sa.Column('created_utc', sa.Integer(), nullable=True),
-    sa.ForeignKeyConstraint(['comment_id'], ['comments.id'], ),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+    #sa.ForeignKeyConstraint(['comment_id'], ['comments.id'], ),
+    #sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+    sa.UniqueConstraint('user_id', 'comment_id'),
     sa.Index('commentvotes_comment_id_idx', 'comment_id'),
     sa.Index('commentvotes_vote_type_idx', 'vote_type'),
     sa.Index('commentvotes_user_id_idx', 'user_id'),
@@ -484,6 +485,16 @@ def schema_upgrades():
     sa.PrimaryKeyConstraint('id')
     )
 
+    op.create_table('boardblocks',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('user_id', sa.Integer(), nullable=True),
+    sa.Column('board_id', sa.Integer(), nullable=True),
+    sa.Column('created_utc', sa.Integer(), nullable=True),
+    sa.ForeignKeyConstraint(['board_id'], ['boards.id'], ),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+
     op.create_table('reports',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('post_id', sa.Integer(), nullable=True),
@@ -518,6 +529,7 @@ def schema_upgrades():
     sa.ForeignKeyConstraint(['id'], ['submissions.id'], ),
     sa.Index('submissionsaux_id_idx', 'id'),
     sa.Index('submissionsaux_title_idx', 'title'),
+    sa.Index('submissionsaux_url_idx', 'url'),
     sa.PrimaryKeyConstraint('key_id')
     )
 
@@ -577,8 +589,9 @@ def schema_upgrades():
     sa.Column('submission_id', sa.Integer(), nullable=True),
     sa.Column('created_utc', sa.Integer(), nullable=False, server_default='0'),
     sa.Column('vote_type', sa.Integer(), nullable=True, server_default='0'),
-    sa.ForeignKeyConstraint(['submission_id'], ['submissions.id'], ),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+    #sa.ForeignKeyConstraint(['submission_id'], ['submissions.id'], ),
+    #sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+    sa.UniqueConstraint('user_id', 'submission_id'),
     sa.Index('votes_user_id_idx', 'user_id'),
     sa.Index('votes_submission_id_idx', 'submission_id'),
     sa.Index('votes_vote_type_idx', 'vote_type'),
@@ -631,15 +644,16 @@ def schema_upgrades():
                             AND parent_submission = $1.id \
                         $_$;")
 
-    op.execute("CREATE FUNCTION public.comment_energy(public.users) RETURNS numeric \
+    op.execute("CREATE FUNCTION public.comment_energy(public.users) RETURNS bigint \
                     LANGUAGE sql IMMUTABLE STRICT \
                     AS $_$ \
                         SELECT COALESCE( \
                         ( \
-                            SELECT SUM(comments.score) \
+                            SELECT SUM(comments.score_top) \
                             FROM comments \
                             WHERE comments.author_id=$1.id \
                             AND comments.is_banned=false \
+                            and comments.parent_submission is not null \
                             ), \
                             0 \
                         ) \
@@ -736,12 +750,12 @@ def schema_upgrades():
                         )) \
                         $_$;")
 
-    op.execute("CREATE FUNCTION public.energy(public.users) RETURNS numeric \
+    op.execute("CREATE FUNCTION public.energy(public.users) RETURNS bigint \
                     LANGUAGE sql IMMUTABLE STRICT \
                     AS $_$ \
                         SELECT COALESCE( \
                         ( \
-                            SELECT SUM(submissions.score) \
+                            SELECT SUM(submissions.score_top) \
                             FROM submissions \
                             WHERE submissions.author_id=$1.id \
                                 AND submissions.is_banned=false \
@@ -827,37 +841,37 @@ def schema_upgrades():
     op.execute("CREATE FUNCTION public.rank_activity(public.submissions) RETURNS double precision \
                     LANGUAGE sql IMMUTABLE STRICT \
                     AS $_$ \
-                        SELECT CAST($1.comment_count AS float)/((CAST(($1.age+5000) AS FLOAT)/100.0)^(1.3)) \
+                        SELECT CAST($1.comment_count AS float)/((CAST(($1.age+5000) AS FLOAT)/100.0)^(1.6)) \
                     $_$;")
 
     op.execute("CREATE FUNCTION public.rank_best(public.submissions) RETURNS double precision \
                     LANGUAGE sql IMMUTABLE STRICT \
                     AS $_$ \
-                        SELECT 10000000.0*CAST(($1.ups - $1.downs) AS float)/((CAST(($1.age+5000) AS FLOAT)*cast((select boards.subscriber_count from boards where boards.id=$1.board_id)+3000 as float)/100.0)^(1.3)) \
+                        SELECT 10000000.0*CAST(($1.ups - $1.downs) AS float)/((CAST(($1.age+5000) AS FLOAT)*cast((select boards.subscriber_count from boards where boards.id=$1.board_id)+3000 as float)/100.0)^(1.6)) \
                     $_$;")
 
     op.execute("CREATE FUNCTION public.rank_fiery(public.comments) RETURNS double precision \
                 LANGUAGE sql IMMUTABLE STRICT \
                 AS $_$ \
-                    SELECT SQRT(CAST(($1.ups * $1.downs) AS float))/((CAST(($1.age+100000) AS FLOAT)/6.0)^(1.3)) \
+                    SELECT SQRT(CAST(($1.ups * $1.downs) AS float))/((CAST(($1.age+100000) AS FLOAT)/6.0)^(1.6)) \
                 $_$;")
 
     op.execute("CREATE FUNCTION public.rank_fiery(public.submissions) RETURNS double precision \
                     LANGUAGE sql IMMUTABLE STRICT \
                     AS $_$ \
-                        SELECT SQRT(CAST(($1.ups * $1.downs) AS float))/((CAST(($1.age+5000) AS FLOAT)/100.0)^(1.3)) \
+                        SELECT SQRT(CAST(($1.ups * $1.downs) AS float))/((CAST(($1.age+5000) AS FLOAT)/100.0)^(1.6)) \
                     $_$;")
 
     op.execute("CREATE FUNCTION public.rank_hot(public.comments) RETURNS double precision \
                     LANGUAGE sql IMMUTABLE STRICT \
                     AS $_$ \
-                        SELECT CAST(($1.ups - $1.downs) AS float)/((CAST(($1.age+100000) AS FLOAT)/6.0)^(1.3)) \
+                        SELECT CAST(($1.ups - $1.downs) AS float)/((CAST(($1.age+100000) AS FLOAT)/6.0)^(1.6)) \
                     $_$;")
 
     op.execute("CREATE FUNCTION public.rank_hot(public.submissions) RETURNS double precision \
                     LANGUAGE sql IMMUTABLE STRICT \
                     AS $_$ \
-                        SELECT CAST(($1.ups - $1.downs) AS float)/((CAST(($1.age+5000) AS FLOAT)/100.0)^(1.3)) \
+                        SELECT CAST(($1.ups - $1.downs) AS float)/((CAST(($1.age+5000) AS FLOAT)/100.0)^(1.6)) \
                     $_$;")
 
     op.execute("CREATE FUNCTION public.recent_subscriptions(public.boards) RETURNS bigint \
@@ -1139,12 +1153,256 @@ def data_upgrades():
                           sa.column('id', sa.Integer()),
                           sa.column('name', sa.String(length=64)),
                           sa.column('description', sa.String(length=256)),
-                          sa.column('icon', sa.String(length=64))
+                          sa.column('icon', sa.String(length=64)),
+                          sa.column('kind', sa.Integer()),
+                          sa.column('rank', sa.Integer()),
+                          sa.Column('qualification_expr', sa.String(length=128))
                           )
 
-    op.execute(badge_defs.insert().values(
-        id='6',
-        name='beta',
-        description='Beta Badge',
-        icon='beta.png'
-    ))
+    op.execute(
+        badge_defs.insert().values(id='1', name='Alpha User', description='Joined Ruqqus during open alpha',
+                                   icon='alpha.png', kind='4', rank='4'))
+    op.execute(
+        badge_defs.insert().values(id='2', name='Verified Email', description='Verified Email', icon='mail.png',
+                                   kind='1', rank='1', qualification_expr='v.is_activated'))
+    op.execute(
+        badge_defs.insert().values(id='3', name='Code Contributor', description='Contributed to Ruqqus source code',
+                                   icon='git.png', kind='3', rank='3'))
+    op.execute(
+        badge_defs.insert().values(id='4', name='White Hat', description='Responsibly reported a security issue',
+                                   icon='whitehat.png', kind='3', rank='3'))
+    op.execute(
+        badge_defs.insert().values(id='6', name='Beta User', description='Joined Ruqqus during open beta', icon='beta.png',
+                                   kind='4', rank='3'))
+    op.execute(
+        badge_defs.insert().values(id='7', name='Sitebreaker', description='Inadvertantly broke Ruqqus',
+                                   icon='sitebreaker.png', kind='3', rank='2'))
+    op.execute(
+        badge_defs.insert().values(id='8', name='Unsilenced', description='Ruqqus rejected a foreign order to take down this user\'s content.',
+                                   icon='unsilenced.png', kind='3', rank='4'))
+    op.execute(
+        badge_defs.insert().values(id='9', name='Unknown', description='Ruqqus rejected a foreign order to turn over this user\'s information',
+                                   icon='unknowable.png', kind='3', rank='4'))
+    op.execute(
+        badge_defs.insert().values(id='10', name='Recruiter', description='Recruited 1 friend to join Ruqqus',
+                                   icon='recruit-1.png', kind='1', rank='1',
+                                   qualification_expr='v.referral_count>=1 and v.referral_count<9'))
+    op.execute(
+        badge_defs.insert().values(id='11', name='Recruiter', description='Recruited 10 friend to join Ruqqus',
+                                   icon='recruit-10.png', kind='1', rank='2',
+                                   qualification_expr='v.referral_count>=10 and v.referral_count<99'))
+    op.execute(
+        badge_defs.insert().values(id='12', name='Recruiter', description='Recruited 100 friend to join Ruqqus',
+                                   icon='recruit-100.png', kind='1', rank='3',
+                                   qualification_expr='v.referral_count>=100'))
+    op.execute(
+        badge_defs.insert().values(id='13', name='New User', description='Been on Ruqqus for less than 30 days',
+                                   icon='baby.png', kind='1', rank='1',
+                                   qualification_expr='v.age < 2592000'))
+    op.execute(
+        badge_defs.insert().values(id='14', name='Charter Supporter', description='Financially supported Ruqqus during start-up',
+                                   icon='charter.png', kind='4', rank='4'))
+    op.execute(
+        badge_defs.insert().values(id='15', name='Idea Maker',
+                                   description='Had a good idea for Ruqqus which was implemented by the developers',
+                                   icon='idea.png', kind='3', rank='2'))
+    op.execute(
+        badge_defs.insert().values(id='16', name='Game Night Participant',
+                                   description='Participated in a Ruqqus community gaming event',
+                                   icon='game-participant.png', kind='3', rank='2'))
+    op.execute(
+        badge_defs.insert().values(id='17', name='Game Night Finalist',
+                                   description='Had a top finish in a Ruqqus community gaming event',
+                                   icon='game-highfinish.png', kind='3', rank='3'))
+    op.execute(
+        badge_defs.insert().values(id='18', name='Artisan', description='Contributed to Ruqqus artwork or text',
+                                   icon='art.png', kind='3', rank='3'))
+    op.execute(
+        badge_defs.insert().values(id='19', name='Fire Extinguisher',
+                                   description='Awarded to @mutageno and @AmoralAtBest for contributing highly advanced technical experience and wisdom during scale-up operations resulting from the flood of new users.',
+                                   icon='fire.png', kind='5', rank='5'))
+    op.execute(
+        badge_defs.insert().values(id='20', name='Dumpster Arsonist',
+                                   description='Awarded to 8535 tenacious users who managed to sign up for Ruqqus while the servers were getting crushed',
+                                   icon='dumpsterfire.png', kind='5', rank='6'))
+    op.execute(
+        badge_defs.insert().values(id='21', name='Bronze Patron', description='Contributes at least $1/month',
+                                   icon='patreon-1.png', kind='2', rank='1',
+                                   qualification_expr='v.patreon_pledge_cents>=100 and v.patreon_pledge_cents<500'))
+    op.execute(
+        badge_defs.insert().values(id='22', name='Silver Patron', description='Contributes at least $5/month',
+                                   icon='patreon-2.png', kind='2', rank='2',
+                                   qualification_expr='v.patreon_pledge_cents>=500 and v.patreon_pledge_cents<2000'))
+    op.execute(
+        badge_defs.insert().values(id='23', name='Gold Patron', description='Contributes at least $20/month',
+                                   icon='patreon-3.png', kind='2', rank='3',
+                                   qualification_expr='v.patreon_pledge_cents>=2000 and v.patreon_pledge_cents<5000'))
+    op.execute(
+        badge_defs.insert().values(id='24', name='Diamond Patron', description='Contributes at least $50/month',
+                                   icon='patreon-4.png', kind='2', rank='4',
+                                   qualification_expr='v.patreon_pledge_cents>=5000'))
+
+    op.execute('SELECT pg_catalog.setval(\'badge_defs_id_seq\', 24, true);')
+
+    titles = sa.table('titles',
+                      sa.column('id', sa.Integer()),
+                      sa.column('is_before', sa.Boolean()),
+                      sa.column('text', sa.String(length=64)),
+                      sa.column('qualification_expr', sa.String(length=256)),
+                      sa.column('requirement_string', sa.String(length=512)),
+                      sa.column('color', sa.String(length=6)),
+                      sa.column('kind', sa.Integer()),
+                      sa.column('background_color_1', sa.String(length=8)),
+                      sa.column('background_color_2', sa.String(length=8)),
+                      sa.column('gradient_angle', sa.Integer()),
+                      sa.column('box_shadow_color', sa.String(length=32)),
+                      sa.column('text_shadow_color', sa.String(length=32)),
+                      )
+
+    op.execute(
+        titles.insert().values(id='1', is_before=False, text=', Novice Recruiter',
+                               qualification_expr='v.referral_count>=1',
+                               requirement_string='Refer 1 friend to join Ruqqus.', color='bb00bb'))
+    op.execute(
+        titles.insert().values(id='2', is_before=False, text=', Expert Recruiter',
+                               qualification_expr='v.referral_count>=10',
+                               requirement_string='Refer 10 friend to join Ruqqus.', color='bb00bb'))
+    op.execute(
+        titles.insert().values(id='3', is_before=False, text=', Master Recruiter',
+                               qualification_expr='v.referral_count>=100',
+                               requirement_string='Refer 100 friend to join Ruqqus.', color='bb00bb'))
+    op.execute(
+        titles.insert().values(id='4', is_before=False, text=', Breaker of Ruqqus',
+                               qualification_expr='v.has_badge(7)',
+                               requirement_string='Inadvertently break Ruqqus', color='dd5555', kind='3'))
+    op.execute(
+        titles.insert().values(id='5', is_before=False, text=' the Codesmith',
+                               qualification_expr='v.has_badge(3)',
+                               requirement_string='Make a contribution to the Ruqqus codebase', color='5555dd', kind='3'))
+    op.execute(
+        titles.insert().values(id='6', is_before=False, text=', Early Adopter',
+                               qualification_expr='v.has_badge(6)',
+                               requirement_string='Joined during open beta', color='aaaa22', kind='4'))
+    op.execute(
+        titles.insert().values(id='7', is_before=False, text=', Very Early Adopter',
+                               qualification_expr='v.has_badge(1)',
+                               requirement_string='Joined during open alpha', color='5555ff', kind='4'))
+    op.execute(
+        titles.insert().values(id='8', is_before=False, text=', the Invited',
+                               qualification_expr='v.referred_by',
+                               requirement_string='Joined Ruqqus from another user\'s referral', color='55aa55', kind='4'))
+    op.execute(
+        titles.insert().values(id='9', is_before=False, text=', Guildmaker',
+                               qualification_expr='v.boards_created.first()',
+                               requirement_string='Create your first Guild', color='aa8855'))
+    op.execute(
+        titles.insert().values(id='10', is_before=False, text=', Guildbuilder',
+                               qualification_expr='v.boards_created.filter(Board.subscriber_count>=10).first()',
+                               requirement_string='A Guild you created grows past 10 members.', color='aa8855'))
+    op.execute(
+        titles.insert().values(id='11', is_before=False, text=', Guildsmith',
+                               qualification_expr='v.boards_created.filter(Board.subscriber_count>=100).first()',
+                               requirement_string='A Guild you created grows past 100 members.', color='aa8855'))
+    op.execute(
+        titles.insert().values(id='12', is_before=False, text=', Guildmaster',
+                               qualification_expr='v.boards_created.filter(Board.subscriber_count>=1000).first()',
+                               requirement_string='A Guild you created grows past 1,000 members.', color='aa8855'))
+    op.execute(
+        titles.insert().values(id='13', is_before=False, text=', Arch Guildmaster',
+                               qualification_expr='v.boards_created.filter(Board.subscriber_count>=10000).first()',
+                               requirement_string='A Guild you created grows past 10,000 members.', color='aa8855'))
+    op.execute(
+        titles.insert().values(id='14', is_before=False, text=', Guildlord',
+                               qualification_expr='v.boards_created.filter(Board.subscriber_count>=100000).first()',
+                               requirement_string='A Guild you created grows past 100,000 members.', color='aa8855'))
+    op.execute(
+        titles.insert().values(id='15', is_before=False, text=', Ultimate Guildlord',
+                               qualification_expr='v.boards_created.filter(Board.subscriber_count>=1000000).first()',
+                               requirement_string='A Guild you created grows past 1,000,000 members.', color='aa8855'))
+    op.execute(
+        titles.insert().values(id='16', is_before=False, text=' the Spymaster',
+                               qualification_expr='v.has_badge(4)',
+                               requirement_string='Responsibly report a security issue to us', color='666666', kind='3'))
+    op.execute(
+        titles.insert().values(id='17', is_before=False, text=', the Unsilenced',
+                               qualification_expr='v.has_badge(8)',
+                               requirement_string='We rejected a foreign order to take down your content', color='666666', kind='3'))
+    op.execute(
+        titles.insert().values(id='18', is_before=False, text=', the Unknown',
+                               qualification_expr='v.has_badge(9)',
+                               requirement_string='We rejected a foreign order for your user information', color='666666', kind='3'))
+    op.execute(
+        titles.insert().values(id='19', is_before=False, text=', Bane of Tyrants',
+                               qualification_expr='v.has_badge(8) and v.has_badge(9)',
+                               requirement_string='We rejected foreign orders for your information and to take down your content.', color='666666', kind='3'))
+    op.execute(
+        titles.insert().values(id='20', is_before=False, text=' the Hot',
+                               qualification_expr='v.submissions.filter(Submission.score>=100).first()',
+                               requirement_string='Get at least 100 Reputation from a single post.', color='dd5555'))
+    op.execute(
+        titles.insert().values(id='21', is_before=False, text=' the Friendly',
+                               qualification_expr='v.follower_count>=1',
+                               requirement_string='Have at least 1 subscriber', color='5555dd'))
+    op.execute(
+        titles.insert().values(id='22', is_before=False, text=' the Likeable',
+                               qualification_expr='v.follower_count>=10',
+                               requirement_string='Have at least 10 subscriber', color='5555dd'))
+    op.execute(
+        titles.insert().values(id='23', is_before=False, text=' the Popular',
+                               qualification_expr='v.follower_count>=100',
+                               requirement_string='Have at least 100 subscriber', color='5555dd'))
+    op.execute(
+        titles.insert().values(id='24', is_before=False, text=' the Influential',
+                               qualification_expr='v.follower_count>=1000',
+                               requirement_string='Have at least 1000 subscriber', color='5555dd'))
+    op.execute(
+        titles.insert().values(id='25', is_before=False, text=', the Famous',
+                               qualification_expr='v.follower_count>=10000',
+                               requirement_string='Have at least 10000 subscriber', color='5555dd'))
+    op.execute(
+        titles.insert().values(id='26', is_before=False, text=' the Generous',
+                               qualification_expr='v.has_badge(14)',
+                               requirement_string='Financially supported Ruqqus during start-up', color='bb00bb', kind='4'))
+    op.execute(
+        titles.insert().values(id='27', is_before=False, text=', the Innovative',
+                               qualification_expr='v.has_badge(15)',
+                               requirement_string='Had a good idea for Ruqqus', color='603abb'))
+    op.execute(
+        titles.insert().values(id='28', is_before=False, text=' the Gamer',
+                               qualification_expr='v.has_badge(16)',
+                               requirement_string='Participate in Ruqqus gaming night', color='bb00bb'))
+    op.execute(
+        titles.insert().values(id='29', is_before=False, text=' [Level 1337]',
+                               qualification_expr='v.has_badge(17)',
+                               requirement_string='Earn a top finish in a Ruqqus gaming night', color='aaaa66'))
+    op.execute(
+        titles.insert().values(id='30', is_before=False, text=' the Artisan',
+                               qualification_expr='v.has_badge(18)',
+                               requirement_string='Made a contribution to Ruqqus text or art.', color='5555dd', kind='3'))
+    op.execute(
+        titles.insert().values(id='31', is_before=False, text=' the Dumpster Arsonist',
+                               qualification_expr='v.has_badge(20)',
+                               requirement_string='Joined Ruqqus despite the flood of users crashing the site', color='885588', kind='4'))
+    op.execute(
+        titles.insert().values(id='32', is_before=False, text=', Bronze Patron',
+                               qualification_expr='v.patreon_pledge_cents>=100 and v.patreon_pledge_cents<500',
+                               requirement_string='Contribute at least $1/month on Patreon', color='aa8855', kind='2'))
+    op.execute(
+        titles.insert().values(id='33', is_before=False, text='Silver Patron',
+                               qualification_expr='v.patreon_pledge_cents>=500 and v.patreon_pledge_cents<2000',
+                               requirement_string='Contribute at least $5/month on Patreon', color='30363c', kind='2',
+                               background_color_1='899caa', background_color_2='c6d1dc', gradient_angle='4'))
+    op.execute(
+        titles.insert().values(id='34', is_before=False, text='Gold Patron',
+                               qualification_expr='v.patreon_pledge_cents>=2000 and v.patreon_pledge_cents<5000',
+                               requirement_string='Contribute at least $20/month on Patreon', color='502e0e', kind='2',
+                               background_color_1='ce9632', background_color_2='f7ce68', gradient_angle='5',
+                               box_shadow_color='216, 178, 84', text_shadow_color='240, 188, 120'))
+    op.execute(
+        titles.insert().values(id='35', is_before=False, text='Diamond Patron',
+                               qualification_expr='v.patreon_pledge_cents>=5000',
+                               requirement_string='Contribute at least $50/month on Patreon', color='2a4042', kind='2',
+                               background_color_1='54c0c0', background_color_2='89e5ee', gradient_angle='10',
+                               box_shadow_color='88, 195, 199', text_shadow_color='191, 220, 216'))
+
+    op.execute('SELECT pg_catalog.setval(\'titles_id_seq\', 35, true);')
